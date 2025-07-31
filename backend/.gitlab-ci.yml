@@ -1,0 +1,82 @@
+image: maven:3.9.6-eclipse-temurin-21
+
+stages:
+  - build
+  - test
+  - generate-openapi
+  - deploy
+variables:
+  MAVEN_CLI_OPTS: "-B -f pom.xml"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+cache:
+  paths:
+    - .m2/repository
+
+build-job:
+  stage: build
+  script:
+    - mvn $MAVEN_CLI_OPTS clean compile
+
+unit-test-job:
+  stage: test
+  script:
+    - mvn $MAVEN_CLI_OPTS clean verify
+  artifacts:
+    paths:
+      - target/site/jacoco
+      - target/openapi.json
+    expire_in: 1 week
+  when: always
+
+# This stage runs the Spring Boot application to generate OpenAPI spec
+generate-openapi-job:
+  stage: generate-openapi
+  script:
+    # Set the Spring profile explicitly
+    - export SPRING_PROFILES_ACTIVE=test
+
+    # Start the Spring Boot application in the background
+    - mvn spring-boot:run -Dspring-boot.run.profiles=$SPRING_PROFILES_ACTIVE -DskipTests &
+
+    # Wait for the application to be fully started (adjust the time if necessary)
+    - sleep 20
+
+    # Download the OpenAPI spec (ensure the port is correct; default is 8080)
+    - curl http://localhost:8080/v3/api-docs -o target/openapi.json
+
+    # Stop the application
+    - kill %1
+  only:
+    - dev
+  artifacts:
+    paths:
+      - target/openapi.json
+
+pages:
+  stage: deploy
+  script:
+    - apt-get update && apt-get install -y unzip
+    # Create necessary directories for GitLab Pages
+    - mkdir -p public/jacoco
+    - mkdir -p public/swagger-ui
+
+    # Copy existing JaCoCo reports
+    - cp -r target/site/jacoco/* public/jacoco/
+
+    # Download and set up Swagger UI
+    - wget https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.9.1.zip -O swagger-ui.zip
+    - unzip swagger-ui.zip
+    - cp -r swagger-ui-5.9.1/dist/* public/swagger-ui/
+
+    # Copy the OpenAPI spec generated during build
+    - cp target/openapi.json public/swagger-ui/
+    - sed -i 's|https://petstore.swagger.io/v2/swagger.json|openapi.json|g' public/swagger-ui/swagger-initializer.js
+
+    # Create an index page
+    - echo '<html><head><title>Krisefikser Documentation</title></head><body><h1>Krisefikser Documentation</h1><ul><li><a href="jacoco/">Test Coverage Report</a></li><li><a href="swagger-ui/">API Documentation</a></li></ul></body></html>' > public/index.html
+  only:
+    - dev
+  artifacts:
+    paths:
+      - public
