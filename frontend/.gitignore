@@ -1,0 +1,23 @@
+# Default ignored files
+/shelf/
+coverage/
+/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+
+# Ignore macOS system file
+.DS_Store
+
+# Ignore JetBrains IDE (e.g., IntelliJ IDEA, WebStorm) project settings
+.idea/
+
+node_modules
+
+dist/
+
+.env
+.env.dev
+.env.test
